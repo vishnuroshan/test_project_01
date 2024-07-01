@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:test_project_01/constants/colors.dart';
-import 'package:test_project_01/model/todo.dart';
-import 'package:test_project_01/widgets/todo_item.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import '../data/database.dart';
+import '../util/dialog_box.dart';
+import '../util/todo_tile.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -11,197 +12,98 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
-  final todoList = Todo.todoList();
-  List<Todo> _foundTodo = [];
-  final _todoController = TextEditingController();
+  // reference the hive box
+  final _myBox = Hive.box('mybox');
+  ToDoDataBase db = ToDoDataBase();
+
   @override
   void initState() {
-    _foundTodo = todoList;
+    // if this is the 1st time ever openin the app, then create default data
+    if (_myBox.get("TODOLIST") == null) {
+      db.createInitialData();
+    } else {
+      // there already exists data
+      db.loadData();
+    }
+
     super.initState();
   }
 
-  void _runFilter(String q) {
-    List<Todo> results = [];
-    if (q.isEmpty) {
-      results = todoList;
-    } else {
-      results = todoList
-          .where(
-              (item) => item.todoText!.toLowerCase().contains(q.toLowerCase()))
-          .toList();
-    }
+  // text controller
+  final _controller = TextEditingController();
 
+  // checkbox was tapped
+  void checkBoxChanged(bool? value, int index) {
     setState(() {
-      _foundTodo = results;
+      db.toDoList[index][1] = !db.toDoList[index][1];
     });
+    db.updateDataBase();
   }
 
-  void handleTodoChange(Todo todo) {
+  // save new task
+  void saveNewTask() {
     setState(() {
-      todo.isDone = !todo.isDone;
+      db.toDoList.add([_controller.text, false]);
+      _controller.clear();
     });
+    Navigator.of(context).pop();
+    db.updateDataBase();
   }
 
-  void handleDeleteItem(String id) {
-    setState(() {
-      todoList.removeWhere((item) => item.id == id);
-    });
+  void ss(String filePath) => () {
+        setState(() {
+          db.toDoList.add([_controller.text, false]);
+          _controller.clear();
+        });
+        Navigator.of(context).pop();
+        db.updateDataBase();
+      };
+
+  // create a new task
+  void createNewTask() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        print(context);
+        return DialogBox(
+          controller: _controller,
+          onSave: saveNewTask,
+          onCancel: () => Navigator.of(context).pop(),
+        );
+      },
+    );
   }
 
-  void _addTodoItem(String todoText) {
+  // delete task
+  void deleteTask(int index) {
     setState(() {
-      todoList.insert(
-          0,
-          Todo(
-              id: DateTime.now().millisecondsSinceEpoch.toString(),
-              todoText: todoText));
+      db.toDoList.removeAt(index);
     });
-    _todoController.clear();
+    db.updateDataBase();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: tdBGColor,
-      appBar: _buildAppBar(),
-      body: Stack(
-        children: [
-          Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-              child: Column(
-                children: [
-                  searchBox(),
-                  Expanded(
-                    child: ListView(
-                      children: [
-                        Container(
-                          margin: const EdgeInsets.only(top: 50, bottom: 20),
-                          child: const Text(
-                            'All TODOs',
-                            style: TextStyle(
-                                fontSize: 30, fontWeight: FontWeight.w500),
-                          ),
-                        ),
-                        for (Todo todo in _foundTodo)
-                          TodoItem(
-                            todo: todo,
-                            onTodoChanged: handleTodoChange,
-                            onDeleteItem: handleDeleteItem,
-                          ),
-                      ],
-                    ),
-                  )
-                ],
-              )),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Row(
-              children: [
-                Expanded(
-                    child: Container(
-                  margin:
-                      const EdgeInsets.only(bottom: 20, right: 20, left: 20),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
-                  decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: const [
-                        BoxShadow(
-                            color: Colors.grey,
-                            offset: Offset(0.0, 0.0),
-                            blurRadius: 10.0,
-                            spreadRadius: 0),
-                      ],
-                      borderRadius: BorderRadius.circular(10)),
-                  child: TextField(
-                    controller: _todoController,
-                    decoration: const InputDecoration(
-                        hintText: 'Add a new todo item',
-                        border: InputBorder.none),
-                  ),
-                )),
-                Container(
-                  margin: const EdgeInsets.only(bottom: 20, right: 20),
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      // _addTodoItem(_todoController.text);
-                    },
-                    style: ElevatedButton.styleFrom(
-                        
-                        backgroundColor: Colors.pinkAccent,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(60, 60),
-                        elevation: 10),
-                        child: const Icon(Icons.upload, color: Colors.white),
-                  ),
-                ),
-                Container(
-                  margin: const EdgeInsets.only(bottom: 20, right: 20),
-                  child: ElevatedButton(
-                    onPressed: () {
-                      _addTodoItem(_todoController.text);
-                    },
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: tdBlue,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(60, 60),
-                        elevation: 10),
-                        child: const Icon(Icons.add, color: Colors.white),
-                    // child: const Text(
-                    //   '+',
-                    //   style: TextStyle(fontSize: 40),
-                    // ),
-                  ),
-                )
-              ],
-            ),
-          )
-        ],
+      backgroundColor: Colors.yellow[200],
+      appBar: AppBar(
+        title: Text('TO DO'),
+        elevation: 0,
       ),
-    );
-  }
-
-  AppBar _buildAppBar() {
-    return AppBar(
-        elevation: 1,
-        backgroundColor: tdBGColor,
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Icon(
-              Icons.menu,
-              color: tdBlack,
-              size: 40,
-            ),
-            // ignore: sized_box_for_whitespace
-            Container(
-              width: 40,
-              height: 40,
-              // if you want to add border radius to container, use below...
-              // decoration: BoxDecoration(borderRadius: BorderRadius.circular(10)),
-              child: ClipRRect(
-                  borderRadius: BorderRadius.circular(20),
-                  child: Image.asset('assets/images/avatar.png')),
-            )
-          ],
-        ));
-  }
-
-  Widget searchBox() {
-    // searchBox({required this.onSearch})
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15),
-      decoration: BoxDecoration(
-          color: Colors.white, borderRadius: BorderRadius.circular(20)),
-      child: TextField(
-        onChanged: (value) => _runFilter(value),
-        decoration: const InputDecoration(
-            border: InputBorder.none,
-            hintText: 'Search',
-            hintStyle: TextStyle(color: tdGrey),
-            contentPadding: EdgeInsets.all(0),
-            prefixIcon: Icon(Icons.search, color: tdBlack, size: 20),
-            prefixIconConstraints: BoxConstraints(maxHeight: 20, minWidth: 25)),
+      floatingActionButton: FloatingActionButton(
+        onPressed: createNewTask,
+        child: Icon(Icons.add),
+      ),
+      body: ListView.builder(
+        itemCount: db.toDoList.length,
+        itemBuilder: (context, index) {
+          return ToDoTile(
+            taskName: db.toDoList[index][0],
+            taskCompleted: db.toDoList[index][1],
+            onChanged: (value) => checkBoxChanged(value, index),
+            deleteFunction: (context) => deleteTask(index),
+          );
+        },
       ),
     );
   }
